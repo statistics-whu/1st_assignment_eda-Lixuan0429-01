@@ -1,0 +1,250 @@
+---
+title: "武汉链家的二手房数据分析报"
+author: "2023281051028-李璇-MEM"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    fig_caption: true
+    latex_engine: xelatex
+    keep_tex: true
+documentclass: ctexart
+header-includes:
+  - \usepackage{setspace}
+  - \setstretch{1.5}
+  - \usepackage{geometry}
+  - \geometry{a4paper, left=2cm, right=2cm, top=2cm, bottom=2cm}
+---
+
+```{r setup,include=FALSE,echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#准备工作
+library(tidyverse)
+install.packages("tidyverse")
+library(kableExtra)
+install.packages("kableExtra")
+library(lubridate)
+install.packages("lubridate")
+library(scales)
+install.packages("scales")
+library(patchwork)
+install.packages("patchwork")
+library(plotly)
+install.packages("plotly")
+library(ggrepel)
+install.packages("ggrepel")
+library(dplyr)
+install.packages("dplyr")
+library(sampling)
+install.packages("sampling")
+library(skimr)
+install.packages("skimr")
+library(readr)
+install.packages("readr")
+library(pander)
+install.packages("pander")
+library(showtext)
+install.packages("showtext")
+showtext_auto(enable=TRUE)
+```
+
+# 你的主要发现
+
+1. 发现1：武汉二手房的房屋单价受地理位置影响较大，呈正相关；
+
+2. 发现2：武汉二手房的房屋设计趋势主要为卧室2~3+客厅1~2；
+  
+3. 发现3：武汉二手房市场主要占据在层高二十几层的房屋。
+
+# 数据介绍
+
+本报告**链家**数据获取方式如下：
+    
+报告人在2023年9月12日获取了[链家武汉二手房网站](https://wh.lianjia.com/ershoufang/)数据。
+    
+- 链家二手房网站默认显示100页，每页30套房产，因此本数据包括3000套房产信息；
+    
+- 数据包括了页面可见部分的文本信息，具体字段及说明见作业说明。
+
+ **说明：**数据仅用于教学；由于不清楚链家数据的展示规则，因此数据可能并不是武汉二手房市场的随机抽样，结论很可能有很大的偏差，甚至可能是错误的。
+
+```{r}
+# 载入数据和预处理
+getwd()
+setwd("C:/Program Files/R")
+lj_wuhan <- read_csv("d:/Users/lix/Desktop/R/2023-09-12_cleaned.csv")
+View(lj_wuhan)
+
+# 数据预处理，去掉重复样本数据。
+lj_wuhan <- distinct(lj_wuhan)
+pander(summary(is.na(lj_wuhan)))
+```
+
+# 数据概览
+
+1、数据表（lj——wuhan)的前10行示例如下：
+
+```{r pressure, echo=FALSE}
+lj_wuhan%>% 
+  head(10)%>%
+  kable(caption = "武汉链家二手房") %>% 
+  kable_styling()
+```
+
+2、各变量的简短信息
+```{r}
+glimpse(lj_wuhan)
+```
+3、各变量的简短统计
+```{r}
+summary(lj_wuhan)
+```
+可以看到：
+
+- 直观结论1
+
+通过简单的数据清洗，原数据包包含18列向量，3000行数据，现在为18列向量，2515行数据;
+
+主要数据内容包含房屋名称（property_name）、房屋地理位置（property_region）、总价（price_ttl)、房屋单价(price_sqm）、卧室数量（bedrooms）、客厅数量（livingrooms）、房屋面积(building_area)、朝向（directions）、装修情况（decoration）、房屋总层高（property_t_height）、房屋高度（property_height） 、房屋类型（property_style）、附近住宅数量（followers）、是否进地铁（near_subway）、房本是否满两年（if_2y)、是否有钥匙(has_key  )、是否可vr看房( vr )。
+
+- 直观结论2
+
+从变量的简短统计可以看出:
+
+房屋单价：均值为15110元/㎡,中位数为14309元/㎡，最高为44656元/㎡，最低为1771 元/㎡；
+卧  室  ：均值为2.689个,中位数为3个；
+客  厅  ：均值为1.706个，中位数为2个；
+房屋面积：均值为100.67㎡，中位值为95.46㎡；
+房屋总层高：均值为24.05层，中位值为27层。
+
+综上，房屋单价浮动大，具体受影响因素还需详细分析；房屋卧室及客厅设计主要集中在2~3室和1~2个客厅的结构；房屋面积主要还是在100㎡左右；房屋总层高也主要是二十多层的高层住宅。
+
+# 探索性分析
+
+## 变量1的数值描述与图形(房屋单价与房屋总层高的关系)
+```{r}
+ggplot(data = lj_wuhan)+
+  geom_smooth(mapping = aes(x=property_t_height,y=price_sqm))
+```
+发现：
+
+- 发现1
+随着房屋总层高的增加，整体的房屋单价呈上涨趋势。由此可以发现，房屋单价与房屋总层高成正相关。但是10层以下及50层以上的价格浮动区间较大，存在60层高的房屋单价低于50层高的情况，说明对超高层的房屋单价还有其他影响因素，需进一步分析。
+
+- 发现2
+房屋总层高在30层左右的，其房屋单价水平相对较稳定，上下浮动区间较小。由此可以发现，3房屋总层高在30层左右的，房屋单价受其他因素的影响较小，且在武汉市场的受众相对较广。
+
+## 变量2的数值描述与图形(房屋卧室及客厅数量与房屋面积的关系)
+```{r}
+ggplot(data = lj_wuhan)+
+  geom_point(mapping = aes(bedrooms,y=building_area))
+ggplot(data = lj_wuhan)+
+  geom_point(mapping = aes(livingrooms,y=building_area))
+```
+发现：
+
+- 发现1
+从武汉的房屋卧室数量来看，卧室房型还是3~4个房间占多数，与均值均值为2.689个存在一定偏差。
+从房屋面积与卧室数量的关系来看，100㎡的房屋主要设计在1~2个房间，100~200㎡的房屋主要设计在3~4个房间.
+综上，可以发现武汉的房屋设计结构主要偏向3~4个卧室，且房屋卧室数量的设计受房屋面积影响。
+
+- 发现2
+从武汉的房屋客厅数量来看，客厅数量在1~2个占多数，与均值、中位值相近。
+从房屋面积与客厅数量的关系来看，200㎡以下的房屋客厅数量均有分布。
+综上，可以发现武汉的房屋设计结构主要偏向1~2个客厅，且房屋客厅数量的设计受房屋面积的影响较小。
+
+## 变量3的数值描述与图形（精装情况及交通与房屋单价的关系）
+```{r}
+ggplot(data=lj_wuhan,mapping = aes(x=price_sqm))+
+  geom_freqpoly(mapping=aes(color=decoration),binwidth=500)
+
+ggplot(data=lj_wuhan,mapping = aes(x=price_sqm))+
+  geom_freqpoly(mapping=aes(color=near_subway),binwidth=500)
+```
+发现：
+
+- 发现1
+武汉市场精装房数量在各个价格段，其数量都是最高的。由此可以发现，武汉目前的二手房房屋市场精装占比最大，简装次之。
+
+- 发现2
+房屋单价处在1.25万以下时，不靠近地铁的房屋数量多于靠近地铁。当房屋单价大于1.25万时，靠近地铁的房屋数量多于不靠近地铁的。由此可以发现，交通的便利会与房屋单价为正相关。
+
+## 探索问题1（房屋单价是否受房屋总层高、地理位置的影响？）
+```{r}
+lj_wuhan[1:115,]%>%
+  ggplot(aes(price_sqm,property_region,color=property_t_height))+
+  geom_point()+
+  
+  geom_smooth(method="lm",se=FALSE)
+
+lj_wuhan[1250:1365,]%>%
+  ggplot(aes(price_sqm,property_region,color=property_t_height))+
+  geom_point()+
+  geom_smooth(method="lm",se=FALSE)
+
+lj_wuhan[2400:2515,]%>%
+  ggplot(aes(price_sqm,property_region,color=property_t_height))+
+  geom_point()+
+  geom_smooth(method="lm",se=FALSE)
+```
+发现：
+
+- 发现1
+结合前面的分析（10层以下的房屋单方浮动较大）及目前的分析发现，如房屋楼栋总层高同样在10以下的蔡甸和阳逻区域，其单价都在5k以下。而在南湖和丁字桥的单价都在3w以上。由此可以发现，在同样房屋楼栋总层高的情况下，商圈或内环的单价更高。
+
+- 发现2
+根据图形分布和市场单价均值（15110元/㎡）可以发现，武汉市场的房屋单价水平在1~2w区间。其中超高层的房屋地理位置更偏向于内环,如百步亭、唐家墩、王家湾、楚河汉界、钟家村等均有分布。结合单价与层高的关系，由此也可以发现超高层的地理位置选择与区域经济状况为正相关。
+
+## 探索问题2（房屋卧室及客厅数量与房屋面积、房屋朝向之间存在什么样的关系？）
+```{r}
+lj_wuhan%>%
+  ggplot(aes(bedrooms,building_area,color=directions1))+
+  geom_point()+
+  geom_smooth(method="lm",se=FALSE)
+
+lj_wuhan%>%
+  ggplot(aes(livingrooms,building_area,color=directions1))+
+  geom_point()+
+  geom_smooth(method="lm",se=FALSE)
+```
+发现：
+
+- 发现1
+房屋面积在200㎡及以上，且设计的卧室数量均在5个及以上的，房屋朝向均为南；
+房屋面积在100㎡以上，且设计的客厅数量均在2个及以上的，房屋朝向也为南;
+由此可以发现，武汉二手房房屋面积分别在200㎡左右以上、100㎡以上的，受朝向影响，越是偏南向，所设计的户型也会更加完善。
+
+- 发现2
+房屋面积在100㎡及以下，客厅的数量分布各个朝向均有；
+房屋面积在100㎡以上，房屋朝向均为南;
+由此可以发现，武汉二手房的房屋面积对客厅的数量影响较小，但100㎡以上的户型较小面积，房屋朝向更优。
+
+## 探索问题3（房屋单价是否受房屋朝向、装修情况影响？）
+```{r}
+ggplot(data = lj_wuhan)+
+  geom_point(mapping = aes(x=decoration,y=price_sqm))
+
+ggplot(data =lj_wuhan, mapping = aes(x =decoration, y =directions1)) +
+   geom_point(aes(size =price_sqm ), alpha = 1/3) +
+   geom_smooth(se = FALSE)
+```
+发现：
+
+- 发现1
+房屋单价在2.5万及以下的，各类装修情况的数量分布差距较小。房屋单价在2.5万以上的，装修情况主要集中在简装及精装。
+由此可以发现，房屋单价在2.5万以下的，其单价受精装情况的影响较小。房屋单价在2.5万以上的，是否精装对单价存在一定影响。
+
+- 发现2
+房屋单价最高的朝向分布在南，房屋单价最高的精装情况分布在简装、精装及毛坯。
+结合上述发现1可以发现，房屋单价受精装修情况的影响较小，朝向与房屋单价呈正相关。
+
+---
+
+# 发现总结
+
+1、房屋单价：对武汉二手房房屋单价会产生较大影响的因素主要包含：房屋楼栋总层高、地理位置、精装情况及是否近地铁。由此可以发现，房屋单价的确定需要结合多方因素，尤其是地理位置对单价的影响最大。
+2、市场受众：武汉二手房的户型偏向3~4个卧室加1-~2个客厅的建构，朝南，精装。由此可以发现武汉的买家在选购中更偏向于实用性及精装的便利。
+3、建议：开发商或卖家在定价时。如选址在商圈或内环，建设超高层并设计完善的房间结构，那么会有更广泛的受众，可设置高位单价。如选址在外环或交通不便，需考虑周边买家的经济情况，从性价比出发，降低单价。
+
+
